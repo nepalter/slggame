@@ -1,0 +1,8 @@
+{
+    "files": [
+        "mainwindow.py",
+        "commands.py",
+        "myslg.py",
+        "ui/ui1.py"
+    ]
+}
