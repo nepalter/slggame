@@ -40,7 +40,12 @@ class BattleMap:
         self.rows = n
         self.columns = m
         self.grid = [[None for _ in range(m)] for _ in range(n)]
+        self.enemy_ai = Easy_EnemyAI(self)
     
+    def set_update_callback(self, callback):
+        # Set the callback function for UI updates
+        self.update_callback = callback
+
     def display_map(self):
         for row in self.grid:
             row_display = " | ".join(["." if cell is None else ("M" if cell.allegiance == "my" else "E") for cell in row])
@@ -57,6 +62,29 @@ class BattleMap:
         else:
             print("Invalid coordinates!")
 
+    
+    def is_within_bounds(self, unit, start_x, start_y, end_x, end_y):
+        # Check if the move is within the unit’s movement range
+        if unit.has_moved:
+            print(f"{unit.name} has already moved this turn!")
+            return
+        move_distance = abs(start_x - end_x) + abs(start_y - end_y)
+        if move_distance > unit.movement:
+            return False
+
+        if 0 > end_x or end_x >= self.rows or 0 > end_y or end_y >= self.columns:
+            return False
+
+        # Ensure the target cell is empty
+        if self.grid[end_x][end_y] is not None:
+            return False
+
+        # Check if the path is clear (no enemies blocking the way)
+        if not self.is_path_clear(start_x, start_y, end_x, end_y, unit.allegiance):
+            return False
+
+        return True        
+    
     def move_unit(self, unit, start_x, start_y, end_x, end_y):
         # Move the specified unit from its current position to the target coordinates if valid
         print(f"Attempting to move {unit.name} from ({start_x}, {start_y}) to ({end_x}, {end_y})")
@@ -64,24 +92,8 @@ class BattleMap:
             print("No unit selected!")
             return
 
-        if unit.has_moved:
-            print(f"{unit.name} has already moved this turn!")
-            return
-
-        # Check if the move is within the unit’s movement range
-        move_distance = abs(start_x - end_x) + abs(start_y - end_y)
-        if move_distance > unit.movement:
-            print(f"Move is out of range! {unit.name} can move up to {unit.movement} spaces.")
-            return
-
-        # Ensure the target cell is empty
-        if self.grid[end_x][end_y] is not None:
-            print("Cannot move to a cell that is already occupied!")
-            return
-
-        # Check if the path is clear (no enemies blocking the way)
-        if not self.is_path_clear(start_x, start_y, end_x, end_y, unit.allegiance):
-            print("Path is blocked by an enemy unit!")
+        if not self.is_within_bounds(unit, start_x, start_y, end_x, end_y):
+            print("Cannot move there!")
             return
 
         # Move the unit if all checks pass
@@ -110,6 +122,7 @@ class BattleMap:
             if distance <= unit.attack_range:
                 unit.attack(target)
                 unit.has_attacked = True  # Set the has_attacked flag to True
+                unit.has_moved = True # You cannot move after attacked.
                 if target.hp <= 0:
                     print(f"{target.name} defeated!")
                     self.grid[target_x][target_y] = None  # Remove defeated unit from the map
@@ -128,7 +141,9 @@ class BattleMap:
         self.reset_units_actions("my")
 
         # Enemy performs actions
-        self.auto_enemy_actions()
+        self.enemy_ai.execute_enemy_turn()
+        # after enemy turn, check victory status
+        self.check_army_defeated("my")
         print("Enemy's turn completed.")
 
         # Reset enemy units for the next turn

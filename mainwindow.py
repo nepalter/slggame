@@ -2,15 +2,12 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QPushButton, QVBoxLayout, QMessageBox, QInputDialog, QDialog, QTextEdit
 from PyQt5.QtCore import Qt
 from myslg import BattleMap, Unit
-from commands import GameCommands
-
 
 class UnitActionDialog(QDialog):
     def __init__(self, unit, parent=None):
         super().__init__(parent)
         self.unit = unit
         self.setWindowTitle(f"{unit.name} Actions")
-
 
         # Create a layout for the dialog
         self.dialog_layout = QVBoxLayout()
@@ -31,10 +28,12 @@ class UnitActionDialog(QDialog):
         self.cancel_button = QPushButton("Cancel")
 
         # Add buttons to the layout
-        if(unit.allegiance=="my"):
-            self.dialog_layout.addWidget(self.move_button)
-            self.dialog_layout.addWidget(self.attack_button)
-            self.dialog_layout.addWidget(self.wait_button)
+        if(unit.allegiance == "my"):
+            if(unit.has_moved == False):
+                self.dialog_layout.addWidget(self.move_button)
+            if(unit.has_attacked == False):           
+                self.dialog_layout.addWidget(self.attack_button)
+                self.dialog_layout.addWidget(self.wait_button)
         
         self.dialog_layout.addWidget(self.cancel_button)
 
@@ -62,18 +61,16 @@ class UnitActionDialog(QDialog):
         self.done(0)
 
 class MapDisplay(QWidget):
-    def __init__(self, battle_map, game_commands):
+    def __init__(self, battle_map):
         super().__init__()
         self.battle_map = battle_map
-        self.game_commands = game_commands
         self.selected_unit = None
         self.action_type = None
         self.highlighted_cells = []
 
 
-
         # Set the update callback to refresh the map after each action
-        self.game_commands.set_update_callback(self.update_map_display)
+        self.battle_map.set_update_callback(self.update_map_display)
 
 
         # Initialize the UI layout
@@ -216,15 +213,14 @@ class MapDisplay(QWidget):
 def main():
     app = QApplication(sys.argv)
     battle_map = BattleMap(5, 5)
-    game_commands = GameCommands(5, 5)
     my_unit = Unit("Knight", 100, 20, 2, 1, "Knight", allegiance="my")
     enemy_unit = Unit("Goblin", 50, 10, 2, 1, "Goblin", allegiance="enemy")
    
-    battle_map.add_unit(my_unit, 2, 1)
+    battle_map.add_unit(my_unit, 0, 0)
     battle_map.add_unit(enemy_unit, 2, 2)
 
 
-    window = MapDisplay(battle_map, game_commands)
+    window = MapDisplay(battle_map)
     window.show()
     sys.exit(app.exec_())
 
