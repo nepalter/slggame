@@ -15,29 +15,33 @@ class Easy_EnemyAI:
     def move_and_attack(self, unit, start_x, start_y):
         # Get potential moves within the unit's movement range
         potential_moves = self.get_potential_moves(start_x, start_y, unit.movement)
-        target_move = None
         target_attack = None
+        target_move = None
+        closest_distance = float('inf')
 
         # Determine if there are any enemy units nearby to attack
         for move in potential_moves:
             target_x, target_y = move
-            if self.battle_map.is_within_bounds(target_x, target_y):
+            if self.battle_map.is_within_bounds(unit, start_x, start_y, target_x, target_y):
                 target_unit = self.battle_map.grid[target_x][target_y]
                 if target_unit and target_unit.allegiance == "my":
-                    target_attack = (target_x, target_y)
-                    break
+                    # Calculate distance to prioritize closer targets
+                    distance = abs(target_x - start_x) + abs(target_y - start_y)
+                    if distance < closest_distance:
+                        closest_distance = distance
+                        target_attack = (target_x, target_y)
                 elif target_unit is None:
                     target_move = move
 
         # Attack if an enemy unit is in range
         if target_attack:
             target_x, target_y = target_attack
-            print(f"{unit.name} at ({start_x}, {start_y}) attacks enemy at ({target_x}, {target_y})")
+            print(f"{unit.name} at ({start_x}, {start_y}) aggressively attacks enemy at ({target_x}, {target_y})")
             unit.attack(self.battle_map.grid[target_x][target_y])
             return
 
         # Otherwise, move to a random valid location
-        if target_move:
+        if target_move and self.battle_map.is_within_bounds(unit, start_x, start_y, target_x, target_y):
             end_x, end_y = target_move
             print(f"{unit.name} moves from ({start_x}, {start_y}) to ({end_x}, {end_y})")
             self.battle_map.grid[end_x][end_y] = unit
