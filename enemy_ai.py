@@ -13,40 +13,42 @@ class Easy_EnemyAI:
                     self.move_and_attack(unit, x, y)
 
     def move_and_attack(self, unit, start_x, start_y):
-        # Get potential moves within the unit's movement range
-        potential_moves = self.get_potential_moves(start_x, start_y, unit.movement)
-        target_attack = None
-        target_move = None
+        # Updated movement and attack logic
+        target = None
         closest_distance = float('inf')
 
-        # Determine if there are any enemy units nearby to attack
-        for move in potential_moves:
-            target_x, target_y = move
-            if self.battle_map.is_within_bounds(unit, start_x, start_y, target_x, target_y):
-                target_unit = self.battle_map.grid[target_x][target_y]
-                if target_unit and target_unit.allegiance == "my":
-                    # Calculate distance to prioritize closer targets
-                    distance = abs(target_x - start_x) + abs(target_y - start_y)
-                    if distance < closest_distance:
-                        closest_distance = distance
-                        target_attack = (target_x, target_y)
-                elif target_unit is None:
-                    target_move = move
+        # Find the nearest target
+        for dx in range(-unit.vision, unit.vision + 1):
+            for dy in range(-unit.vision, unit.vision + 1):
+                nx, ny = start_x + dx, start_y + dy
+                if 0 <= nx < self.battle_map.rows and 0 <= ny < self.battle_map.columns:
+                    target_unit = self.battle_map.grid[nx][ny]
+                    if target_unit and target_unit.allegiance != "enemy":
+                        distance = abs(dx) + abs(dy)
+                        if distance < closest_distance:
+                            closest_distance = distance
+                            target = (nx, ny)
 
-        # Attack if an enemy unit is in range
-        if target_attack:
-            target_x, target_y = target_attack
-            print(f"{unit.name} at ({start_x}, {start_y}) aggressively attacks enemy at ({target_x}, {target_y})")
-            unit.attack(self.battle_map.grid[target_x][target_y])
-            return
+        # Move towards the target if not in range
+        if target:
+            target_x, target_y = target
+            if closest_distance >= unit.attack_range:
+                # Move closer to the target
+                move_dx = 1 if target_x > start_x else -1 if target_x < start_x else 0
+                move_dy = 1 if target_y > start_y else -1 if target_y < start_y else 0
+                target_x, target_y = start_x + move_dx, start_y + move_dy
+
+                if self.is_within_bounds(target_x, target_y) and self.battle_map.is_within_bounds(unit, start_x, start_y, target_x, target_y) and self.battle_map.grid[target_x][target_y] == None:
+                    # Move the unit
+                    self.battle_map.move_unit(unit, start_x, start_y, target_x, target_y)
+
+            # Attack if in range
+            if abs(target_x - start_x) + abs(target_y - start_y) <= unit.attack_range and self.battle_map.grid[target_x][target_y].allegiance != "enemy":
+                self.battle_map.attack_unit(unit, start_x, start_y, target_x, target_y)
 
         # Otherwise, move to a random valid location
-        if target_move and self.battle_map.is_within_bounds(unit, start_x, start_y, target_x, target_y):
-            end_x, end_y = target_move
-            print(f"{unit.name} moves from ({start_x}, {start_y}) to ({end_x}, {end_y})")
-            self.battle_map.grid[end_x][end_y] = unit
-            self.battle_map.grid[start_x][start_y] = None
-            unit.has_moved = True
+        if target and self.is_within_bounds(target_x, target_y) and self.battle_map.grid[target_x][target_y] == None:
+            self.battle_map.move_unit(unit, start_x, start_y, target_x, target_y)
 
     def get_potential_moves(self, start_x, start_y, movement_range):
         # Get all possible moves within the unit's movement range
@@ -56,3 +58,7 @@ class Easy_EnemyAI:
                 if abs(dx) + abs(dy) <= movement_range:
                     potential_moves.append((start_x + dx, start_y + dy))
         return potential_moves
+
+    def is_within_bounds(self, x, y):
+        # Check if the given coordinates are within the map bounds
+        return 0 <= x < self.battle_map.rows and 0 <= y < self.battle_map.columns

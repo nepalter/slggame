@@ -28,7 +28,7 @@ class UnitActionDialog(QDialog):
         self.cancel_button = QPushButton("Cancel")
 
         # Add buttons to the layout
-        if(unit.allegiance == "my"):
+        if(unit.allegiance == "player"):
             if(unit.has_moved == False):
                 self.dialog_layout.addWidget(self.move_button)
             if(unit.has_attacked == False):           
@@ -112,7 +112,7 @@ class MapDisplay(QWidget):
                 unit = self.battle_map.grid[row][col]
                 if unit:
                     cell_text = f"{unit.name}\nHP: {unit.hp}/{unit.max_hp}\n{unit.allegiance}"
-                    color = "lightblue" if unit.allegiance == "my" else "lightcoral"
+                    color = "lightblue" if unit.allegiance == "player" else "lightcoral"
                 else:
                     cell_text = "Empty"
                     color = "lightgrey"
@@ -213,7 +213,7 @@ class MapDisplay(QWidget):
 def main():
     app = QApplication(sys.argv)
     battle_map = BattleMap(5, 5)
-    my_unit = Unit("Knight", 100, 20, 2, 1, "Knight", allegiance="my")
+    my_unit = Unit("Knight", 100, 20, 2, 1, "Knight", allegiance="player")
     enemy_unit = Unit("Goblin", 50, 10, 2, 1, "Goblin", allegiance="enemy")
    
     battle_map.add_unit(my_unit, 0, 0)

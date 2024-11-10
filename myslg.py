@@ -2,7 +2,7 @@ import random
 from enemy_ai import Easy_EnemyAI
 
 class Unit:
-    def __init__(self, unit_type, max_hp, atk, movement, attack_range, name=None, skill=None, allegiance="my", has_moved=False, has_attacked=False):
+    def __init__(self, unit_type, max_hp, atk, movement, attack_range, name=None, skill=None, allegiance="player", has_moved=False, has_attacked=False):
         self.name = name if name else unit_type
         self.unit_type = unit_type
         self.max_hp = max_hp
@@ -11,6 +11,7 @@ class Unit:
         self.movement = movement
         self.attack_range = attack_range
         self.skill = skill
+        self.vision = 10 #no fog of war for now
         self.allegiance = allegiance
         self.has_moved = False  # Track if unit has moved during the turn
         self.has_attacked = False  # Track if unit has attacked during the turn
@@ -31,16 +32,21 @@ class Unit:
         print(info)
 
     def attack(self, target):
-        """Attacks another unit, reducing their HP."""
-        target.hp -= self.atk
-        print(f"{self.name} attacks {target.name} for {self.atk} damage. {target.name} now has {target.hp} HP.")
+        # Attack logic
+        if target:
+            target.hp -= self.atk
+            print(f"{self.name} attacks {target.name} for {self.atk} damage. {target.name} has {target.hp} HP remaining.")
+
+    def check_unit_defeated(self):
+        return self.hp <= 0
 
 class BattleMap:
-    def __init__(self, n, m):
+    def __init__(self, n, m, turn=1):
         self.rows = n
         self.columns = m
         self.grid = [[None for _ in range(m)] for _ in range(n)]
         self.enemy_ai = Easy_EnemyAI(self)
+        self.turn = turn
     
     def set_update_callback(self, callback):
         # Set the callback function for UI updates
@@ -48,7 +54,7 @@ class BattleMap:
 
     def display_map(self):
         for row in self.grid:
-            row_display = " | ".join(["." if cell is None else ("M" if cell.allegiance == "my" else "E") for cell in row])
+            row_display = " | ".join(["." if cell is None else ("player" if cell.allegiance == "player" else "enemy") for cell in row])
             print(row_display)
             print("-" * (4 * self.columns - 1))
 
@@ -116,19 +122,21 @@ class BattleMap:
 
         # Check if there's an enemy unit at the target location
         target = self.grid[target_x][target_y]
-        if target and target.allegiance == "enemy":
+        if target and target.allegiance != unit.allegiance:
             # Check if the target is within attack range
             distance = abs(target_x - start_x) + abs(target_y - start_y)
             if distance <= unit.attack_range:
                 unit.attack(target)
                 unit.has_attacked = True  # Set the has_attacked flag to True
                 unit.has_moved = True # You cannot move after attacked.
-                if target.hp <= 0:
+                # function to check if unit is defeated  
+                print(f"{target.name} defeated: {target.check_unit_defeated()}")       
+                if target.check_unit_defeated():
+                    # Remove the target from the grid
+                    self.grid[target_x][target_y] = None
                     print(f"{target.name} defeated!")
-                    self.grid[target_x][target_y] = None  # Remove defeated unit from the map
-                    self.check_for_defeat_or_victory()  # Check for game-ending conditions
-                else:
-                    print(f"{target.name} has {target.hp} HP remaining.")
+                    if self.check_army_defeated(target.allegiance):
+                        print (f"{target.allegiance} lost all units!")
             else:
                 print("Target is out of attack range!")
         else:
@@ -138,16 +146,18 @@ class BattleMap:
         # End the player's turn, reset my units, and initiate enemy actions
         print("Ending turn. Resetting units and initiating enemy actions.")
         # Reset my units' movement and attack status
-        self.reset_units_actions("my")
+        self.reset_units_actions("player")
 
         # Enemy performs actions
         self.enemy_ai.execute_enemy_turn()
         # after enemy turn, check victory status
-        self.check_army_defeated("my")
+        self.check_army_defeated("player")
         print("Enemy's turn completed.")
 
         # Reset enemy units for the next turn
         self.reset_units_actions("enemy")
+        self.turn += 1
+        print(f"Turn {self.turn}: Player's turn start.")
 
     def reset_units_actions(self, allegiance):
         # Reset has_moved and has_attacked flags for all units of the specified allegiance.
@@ -169,7 +179,7 @@ class BattleMap:
     def check_for_defeat_or_victory(self):
         if self.check_army_defeated("enemy"):
             print("Victory! All enemy units have been defeated.")
-        elif self.check_army_defeated("my"):
+        elif self.check_army_defeated("player"):
             print("Defeat! All of your units have been defeated.")
  
     '''
@@ -178,7 +188,7 @@ class BattleMap:
         for x in range(self.rows):
             for y in range(self.columns):
                 unit = self.grid[x][y]
-                if unit and unit.allegiance == "my":
+                if unit and unit.allegiance == "player":
                     print(f"{unit.name} at ({x}, {y}) - HP: {unit.hp}")
     '''
     def display_map(self):
@@ -197,21 +207,3 @@ class BattleMap:
                 if self.grid[x][y].allegiance != allegiance:
                     return False
         return True
-
-    def auto_enemy_actions(self):
-        """Automatically moves and attacks with enemy units."""
-        for x in range(self.rows):
-            for y in range(self.columns):
-                unit = self.grid[x][y]
-                if unit and unit.allegiance == "enemy":
-                    self.enemy_move_and_attack(unit, x, y)
-
-    def enemy_move_and_attack(self, unit, x, y):
-        # Simplified enemy movement towards the nearest ally
-        for dx in range(-unit.movement, unit.movement + 1):
-            for dy in range(-unit.movement, unit.movement + 1):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < self.rows and 0 <= ny < self.columns and self.grid[nx][ny] and self.grid[nx][ny].allegiance == "my":
-                    unit.attack(self.grid[nx][ny])
-                    return
-
