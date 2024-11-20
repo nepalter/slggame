@@ -97,7 +97,11 @@ class MainMenu(QWidget):
         battle_map = selected_map_function()  # Initialize the selected map
         self.game_interface = MapDisplay(battle_map)  # Pass the map to the game interface
         self.game_interface.show()
-        
+
+        # Return to main menu if codition is met
+        self.game_interface.return_to_main_menu_signal.connect(self.show_main_menu)
+
+
 
     def load_game(self):
         QMessageBox.information(self, "Load Game", "Loading game...")
@@ -112,6 +116,14 @@ class MainMenu(QWidget):
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
             QApplication.instance().quit()
+
+    def show_main_menu(self):
+        #Show the main menu when game over.
+        if self.game_interface:
+            self.game_interface.close()
+            self.game_interface = None  # Clean up reference
+        self.show()      
+
 
 # Running the main menu
 if __name__ == "__main__":
