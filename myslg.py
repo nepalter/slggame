@@ -1,8 +1,9 @@
 import random
+from PyQt5.QtCore import QObject, pyqtSignal
 from enemy_ai import Easy_EnemyAI
 
 class Unit:
-    def __init__(self, unit_type, max_hp, atk, movement, attack_range, name=None, skill=None, allegiance="player", has_moved=False, has_attacked=False):
+    def __init__(self, unit_type, max_hp, atk, movement, attack_range, name=None, skills=None, allegiance="player", has_moved=False, has_attacked=False):
         self.name = name if name else unit_type
         self.unit_type = unit_type
         self.max_hp = max_hp
@@ -10,7 +11,7 @@ class Unit:
         self.atk = atk
         self.movement = movement
         self.attack_range = attack_range
-        self.skill = skill
+        self.skills = []
         self.vision = 10 #no fog of war for now
         self.allegiance = allegiance
         self.has_moved = False  # Track if unit has moved during the turn
@@ -27,8 +28,10 @@ class Unit:
             f"Attack Range: {self.attack_range}\n"
             f"Allegiance: {self.allegiance}"
         )
-        if self.skill:
-            info += f"\nSkill: {self.skill}"
+        if self.skills:
+            info += f"\nSkill:"
+            for skill in self.skills:
+                info += f"\n{skill.name}: {skill.description}"
         print(info)
 
     def attack(self, target):
@@ -40,13 +43,59 @@ class Unit:
     def check_unit_defeated(self):
         return self.hp <= 0
 
-class BattleMap:
-    def __init__(self, n, m, turn=1):
+class Skill:
+    def __init__(self, name, damage, range, effect_type, cooldown, turns_until_ready = 0, description = ""):
+        self.name = name
+        self.damage = damage
+        self.range = range
+        self.effect_type = effect_type
+        self.cooldown = cooldown
+        self.turns_until_ready = turns_until_ready
+        self.description = description
+
+    def is_available(self):
+        return self.turns_until_ready == 0
+
+    def apply_effect(self, user, target):
+        if self.effect_type == "damage":
+            target.hp -= self.damage
+        # Add other effect types like healing, buffs, etc.
+        elif self.effect_type == "healing":
+            target.hp += self.damage
+        self.turns_until_ready = self.cooldown
+
+class Passive_skill:
+    def __init__(self, name, damage, range, effect_type, cooldown, turns_until_ready = 0, description = ""):
+        self.name = name
+        self.damage = damage
+        self.range = range
+        self.effect_type = effect_type
+        self.cooldown = cooldown
+        self.turns_until_ready = turns_until_ready
+        self.description = description
+
+    def is_available(self):
+        return self.turns_until_ready == 0
+
+    def apply_effect(self, user, target):
+        if self.effect_type == "damage":
+            target.hp -= self.damage
+        # Add other effect types like healing, buffs, etc.
+        elif self.effect_type == "healing":
+            target.hp += self.damage
+        self.turns_until_ready = self.cooldown   
+
+class BattleMap(QObject):
+    game_over_signal = pyqtSignal(str) #signal to end the game
+
+    def __init__(self, n, m, turn=1, territory="plain"):
+        super().__init__()  # Properly initialize QObject
         self.rows = n
         self.columns = m
         self.grid = [[None for _ in range(m)] for _ in range(n)]
         self.enemy_ai = Easy_EnemyAI(self)
         self.turn = turn
+        self.territory = territory
     
     def set_update_callback(self, callback):
         # Set the callback function for UI updates
@@ -146,14 +195,56 @@ class BattleMap:
                 self.grid[target_x][target_y] = None
                 print(f"{target.name} defeated!")
                 if self.check_army_defeated(target.allegiance):
-                    print (f"{target.allegiance} lost all units!")
+                    self.handle_gameover(target.allegiance)
 
+    
+    def use_skill(self, unit, skill, start_x, start_y, target_x, target_y):
+        # Deploy a skill on a target.
+        target = self.grid[target_x][target_y]
+        if not target:
+            print("No unit at the target location!")
+            return False           
+
+        if (target.allegiance != unit.allegiance and (skill.effect_type == "buff" or skill.effect_type == "heal")) \
+        or (target.allegiance == unit.allegiance and (skill.effect_type == "debuff" or skill.effect_type == "attack")):
+            print("Not a valid Target!")
+            return False                      
+
+        if skill.turns_until_ready > 0:
+            print(f"Skill {skill.name} is on cooldown for {skill.turns_until_ready} turns.")
+            return False
+
+        # limit healing if units' hp is full
+        if skill.effect_type == "heal" and target.hp >= target.max_hp:
+            print(f"{target.name}'s HP is already full.")
+            return False           
+
+        distance = abs(start_x - target_x) + abs(start_y - target_y)  # Assuming grid coordinates
+        if distance > skill.range:
+            print(f"Target is out of range for skill {skill.name}.")
+            return False
+
+        # Apply the skill effect
+        if skill.effect_type == "attack":
+            damage = skill.damage
+            target.hp -= damage
+            print(f"{unit.name} used {skill.name} on {target.name}, dealing {damage} damage.")
+        elif skill.effect_type == "heal": 
+            heal_amount = skill.damage
+            target.hp = min(target.max_hp , target.hp + heal_amount)
+            print(f"{unit.name} used {skill.name} on {target.name}, heals {heal_amount} HP.")
+
+        # Set the cooldown
+        skill.turns_until_ready = skill.cooldown  # Assuming skills have a default cooldown value
+        # Set unit complete its term
+        unit.has_moved = True
+        unit.has_attacked = True
 
     def end_turn(self):
         # End the player's turn, reset my units, and initiate enemy actions
         print("Ending turn. Resetting units and initiating enemy actions.")
         # Reset my units' movement and attack status
-        self.reset_units_actions("player")
+        self.reset_units_actions("player") # reset player's actions first for some skill to limit enemy action in next turn.
 
         # Enemy performs actions
         self.enemy_ai.execute_enemy_turn()
@@ -164,7 +255,21 @@ class BattleMap:
         # Reset enemy units for the next turn
         self.reset_units_actions("enemy")
         self.turn += 1
+
+        self.skill_cooldown() #decrement all units' skill's cooldown by 1
+
         print(f"Turn {self.turn}: Player's turn start.")
+
+    def skill_cooldown(self):
+        """Decreases the cooldown of all skills for every unit on the map."""
+        for row in self.grid:
+            for unit in row:
+                if unit:  # Ensure there is a unit in the cell
+                    for skill in unit.skills:
+                        if skill.turns_until_ready > 0:
+                            skill.turns_until_ready -= 1
+                            print(f"Skill '{skill.name}' on unit '{unit.name}' cooldown decreased to {skill.turns_until_ready}.")
+
 
     def reset_units_actions(self, allegiance):
         # Reset has_moved and has_attacked flags for all units of the specified allegiance.
@@ -182,14 +287,12 @@ class BattleMap:
                 if cell and cell.allegiance == allegiance:
                     return False  # Found a unit of the specified allegiance, army is not defeated
         return True  # No units found of the specified allegiance, army is defeated
+    
+    def handle_gameover(self, allegiance):
+        print (f"{allegiance} lost all units!")
+        self.game_over_signal.emit(allegiance)
  
-    def check_for_defeat_or_victory(self):
-        if self.check_army_defeated("enemy"):
-            print("Victory! All enemy units have been defeated.")
-        elif self.check_army_defeated("player"):
-            print("Defeat! All of your units have been defeated.")
- 
-    '''
+    
     def display_units(self):
         """Display all my units and their positions on the map."""
         for x in range(self.rows):
@@ -197,7 +300,7 @@ class BattleMap:
                 unit = self.grid[x][y]
                 if unit and unit.allegiance == "player":
                     print(f"{unit.name} at ({x}, {y}) - HP: {unit.hp}")
-    '''
+    
     def display_map(self):
         """Display the current battle map."""
         self.display_map()    
