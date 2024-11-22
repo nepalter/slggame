@@ -85,6 +85,15 @@ class Passive_skill:
             target.hp += self.damage
         self.turns_until_ready = self.cooldown   
 
+class Buff:
+    def __init__(self, name, align_type, effect_type, affect, turns, description = ""):
+        self.name = name
+        self.align_type = align_type
+        self.effect_type = effect_type
+        self.turns = turns
+        self.affect = affect
+        self.description = description
+
 class BattleMap(QObject):
     game_over_signal = pyqtSignal(str) #signal to end the game
 
@@ -233,7 +242,12 @@ class BattleMap(QObject):
             heal_amount = skill.damage
             target.hp = min(target.max_hp , target.hp + heal_amount)
             print(f"{unit.name} used {skill.name} on {target.name}, heals {heal_amount} HP.")
-
+        '''
+        elif skill.effect_type == "buff": 
+            buff = skill.buff
+            target.buff.append(buff)
+            print(f"{unit.name} used {skill.name} on {target.name}.")
+        '''
         # Set the cooldown
         skill.turns_until_ready = skill.cooldown  # Assuming skills have a default cooldown value
         # Set unit complete its term

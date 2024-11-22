@@ -31,7 +31,7 @@ def desert_map():
     battle_map.territory = "desert"
     player_unit_1 = Unit("Cavalry", 120, 30, 4, 1, "Cavalry", allegiance="player")
     player_unit_2 = Unit("Healer", 60, 20, 2, 3, "Healer", allegiance="player")
-    player_unit_2.skills.extend([fireball(),heal()])
+    player_unit_2.skills.extend([fireball(),heal(),warCry()])
     enemy_unit_1 = Unit("Sand Raider", 70, 15, 3, 1, "Raider", allegiance="enemy")
     enemy_unit_2 = Unit("Sand Raider", 70, 15, 3, 1, "Raider", allegiance="enemy")
     battle_map.add_unit(player_unit_1, 0, 7)
