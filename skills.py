@@ -16,8 +16,9 @@ def thunder():
     skill = Skill("Thunder", 70, 3, "attack", 6)
     return skill
 
+# for buff skills, the 'damage' is the # of buff in buffs list.
 def warCry():
-    skill = Skill("War Cry", 10, 0, "buff", 4)
+    skill = Skill("War Bless", 1, 2, "buff", 4)
     return skill
 
 def heal():

@@ -32,10 +32,7 @@ class Easy_EnemyAI:
             if unit_in_block and self.battle_map.is_within_bounds(unit,start_x,start_y,x,y) and unit_in_block.allegiance != "enemy":
                 target=(x,y)
                 chosen_enemy.append(target)
-        if chosen_enemy:
-            print(f"Enemy: {occupied_positions},{chosen_enemy}")
-        else: # find nearest enemy
-            # No enemies within range; find the closest enemy
+        if not chosen_enemy: # No enemies within range; find the closest enemy
             closest_distance = float('inf')
             closest_unit = None
 
@@ -56,13 +53,11 @@ class Easy_EnemyAI:
         if chosen_enemy:                
             x,y = chosen_enemy[0] # for simple AI, find the first one in range
             if self.battle_map.able_to_attack(unit, start_x, start_y, x, y): # if don't need to move
-                print(f"enemy going to attack :{unit.name}")
                 self.battle_map.attack_unit(unit, start_x, start_y, x, y)
             else: #move closer to that unit and try to attack
                 nearest_block = self.find_nearest_reachable_block(start_x, start_y, x, y, unit.movement, unit.attack_range, occupied_positions)
                 if nearest_block:
                     dx, dy = nearest_block
-                    print(f"enemy going to move close:{unit.name}")
                     self.battle_map.move_unit(unit, start_x, start_y, dx, dy)
                     self.battle_map.attack_unit(unit, dx, dy, x, y)        
 

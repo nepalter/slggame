@@ -1,5 +1,5 @@
 import sys, os
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QPushButton, QVBoxLayout, QMessageBox, QInputDialog, QDialog, QTextEdit,  QRadioButton, QButtonGroup
+from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QLabel, QPushButton, QVBoxLayout, QMessageBox, QInputDialog, QDialog, QTextEdit,  QRadioButton, QButtonGroup,  QHBoxLayout
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPixmap
 from myslg import BattleMap, Unit, Skill, Passive_skill
@@ -66,14 +66,12 @@ class UnitActionDialog(QDialog):
         if dialog.show():  # Check if the dialog was accepted
             selected_skill = dialog.selected_skill
             if selected_skill:
-                print(f"Selected skill: {selected_skill.name}")
                 # Perform actions with the selected skill, e.g., deploy it
                 self.use_selected_skill(unit, selected_skill)
         
 
     def use_selected_skill(self, unit, skill):
         """Executes the selected skill."""
-        print(f"{unit.name} is using {skill.name}!")
         # Implement the logic to use the skill (damage, effects, etc.)
         self.accept() #hide menu
         self.parent().start_action_selection("skill", unit, played_skill=skill)
@@ -135,6 +133,17 @@ class SkillSelectionDialog(QDialog):
         self.selected_skill = None
         self.reject()
 
+# Show events of game
+class Logger:
+    def __init__(self, text_edit_widget):
+        self.widget = text_edit_widget
+
+    def write(self, message):
+        self.widget.append(message.strip())  # Append and strip unnecessary newlines
+
+    def flush(self):
+        pass  # Compatibility with stdout
+
 class MapDisplay(QWidget):
     return_to_main_menu_signal = pyqtSignal()
     def __init__(self, battle_map):
@@ -148,6 +157,9 @@ class MapDisplay(QWidget):
         # Show gameover popup if condition is met
         self.battle_map.game_over_signal.connect(self.gameover_popup)
 
+        # Show notifications
+        self.battle_map.notification_signal.connect(self.notification_popup)
+
 
         # Set the update callback to refresh the map after each action
         self.battle_map.set_update_callback(self.update_map_display)
@@ -159,25 +171,41 @@ class MapDisplay(QWidget):
         # set background image
         image = os.path.join(os.path.dirname(__file__), "images", "background", f"{battle_map.territory}.png")
         self.set_background_image(image)
+        
+        print(f"Battleground: {battle_map.territory}")
+        print(f"Good Luck!")        
 
 
     def init_ui(self):
         self.setWindowTitle("Battle Map")
-        self.layout = QVBoxLayout()
-       
-        # Create a grid layout for the map
+        # Main layout: horizontal layout for map and log
+        self.main_layout = QHBoxLayout(self)
+
+        # Left side: Map layout
+        self.map_layout = QVBoxLayout()
+
+        # Create the map display area
         self.grid_layout = QGridLayout()
+        self.map_layout.addLayout(self.grid_layout)
         self.update_map_display()
-       
-        # End Turn button
+
+        # Add "End Turn" button
         end_turn_button = QPushButton("End Turn")
         end_turn_button.clicked.connect(self.end_turn)
+        self.map_layout.addWidget(end_turn_button)
 
+        # Add map layout to the main layout
+        self.main_layout.addLayout(self.map_layout)
 
-        self.layout.addLayout(self.grid_layout)
-        self.layout.addWidget(end_turn_button)
-        self.setLayout(self.layout)
+        # Right side: Log widget
+        self.log_widget = QTextEdit()
+        self.log_widget.setReadOnly(True)
+        self.log_widget.setStyleSheet("background-color: #f0f0f0;")
+        self.main_layout.addWidget(self.log_widget, stretch=1)
 
+        # Redirect stdout to log widget
+        logger = Logger(self.log_widget)
+        sys.stdout = logger
     def set_background_image(self, image_path):
         # Create a QLabel for the background image
         self.background_label = QLabel(self)
@@ -186,7 +214,7 @@ class MapDisplay(QWidget):
         self.background_label.setScaledContents(True)  # Adjust image to fit the widget size
         self.background_label.resize(self.size())  # Cover the widget
         self.background_label.lower()  # Send to the bottom layer
-        print(f"Background image set to {image_path}")
+        # print(f"Background image set to {image_path}")
 
     def resizeEvent(self, event):
         super(MapDisplay, self).resizeEvent(event)
@@ -209,7 +237,14 @@ class MapDisplay(QWidget):
                 unit = self.battle_map.grid[row][col]
                 if unit:
                     cell_text = f"{unit.name}\nHP: {unit.hp}/{unit.max_hp}\n{unit.allegiance}"
-                    color = "rgba(173, 216, 230, 150)" if unit.allegiance == "player" else "rgba(240, 128, 128, 150)"
+                    # Check unit status and apply appropriate colors
+                    if unit.has_moved and unit.has_attacked:
+                        if unit.allegiance == "player":
+                            color = "rgba(0, 0, 139, 150)"  # Dark Blue Transparency
+                        else:
+                            color = "rgba(139, 0, 0, 150)"  # Dark Red Transparency
+                    else:
+                        color = "rgba(173, 216, 230, 150)" if unit.allegiance == "player" else "rgba(240, 128, 128, 150)"
                 else:
                     cell_text = ""
                     color = "rgba(211, 211, 211, 100)"  # Light grey with transparency
@@ -279,9 +314,10 @@ class MapDisplay(QWidget):
             self.clear_highlight()
             self.update_map_display()
         else:
-            QMessageBox.warning(self, "Out of Range", "Selected block is out of range. Reopening action dialog.")
+            QMessageBox.warning(self, "Out of Range", "Selected block is out of range.")
             self.clear_highlight()
-            self.show_unit_action_dialog(self.selected_unit)
+            self.update_map_display()
+            # self.show_unit_action_dialog(self.selected_unit)
 
 
     def handle_attack_click(self, row, col):
@@ -291,9 +327,10 @@ class MapDisplay(QWidget):
             self.clear_highlight()
             self.update_map_display()
         else:
-            QMessageBox.warning(self, "Out of Range", "Selected block is out of range. Reopening action dialog.")
+            QMessageBox.warning(self, "Out of Range", "Selected block is out of range.")
             self.clear_highlight()
-            self.show_unit_action_dialog(self.selected_unit)
+            self.update_map_display()
+            # self.show_unit_action_dialog(self.selected_unit)
 
     def handle_skill_click(self, row, col, skill=None):
         start_x, start_y = self.find_unit_position(self.selected_unit)
@@ -302,9 +339,10 @@ class MapDisplay(QWidget):
             self.clear_highlight()
             self.update_map_display()
         else:
-            QMessageBox.warning(self, "Out of Range", "Selected block is out of range. Reopening action dialog.")
+            QMessageBox.warning(self, "Out of Range", "Selected block is out of range.")
             self.clear_highlight()
-            self.show_unit_action_dialog(self.selected_unit)
+            self.update_map_display()
+            # self.show_unit_action_dialog(self.selected_unit)
 
 
     def is_within_range(self, start_x, start_y, target_x, target_y, range_value):
@@ -336,6 +374,10 @@ class MapDisplay(QWidget):
         elif alligence == "player":
             QMessageBox.information(self, "Game Over", "You Lose!", QMessageBox.Ok)
         self.return_to_main_menu()
+
+    def notification_popup(self, message):
+        # Display a pop-up with the notification message
+        QMessageBox.warning(self, "Notification", message)
 
     def return_to_main_menu(self):
         # Return to the main menu.

@@ -96,6 +96,7 @@ class Buff:
 
 class BattleMap(QObject):
     game_over_signal = pyqtSignal(str) #signal to end the game
+    notification_signal = pyqtSignal(str)  # signal to show notifications
 
     def __init__(self, n, m, turn=1, territory="plain"):
         super().__init__()  # Properly initialize QObject
@@ -116,6 +117,7 @@ class BattleMap(QObject):
             print(row_display)
             print("-" * (4 * self.columns - 1))
 
+    # Future use for Reinforcement
     def add_unit(self, unit, x, y):
         if 0 <= x < self.rows and 0 <= y < self.columns:
             if self.grid[x][y] is None:
@@ -130,7 +132,8 @@ class BattleMap(QObject):
     def is_within_bounds(self, unit, start_x, start_y, end_x, end_y):
         # Check if the move is within the unit’s movement range
         if unit.has_moved:
-            print(f"{unit.name} has already moved this turn!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit(f"{unit.name} has already moved this turn!")
             return
         move_distance = abs(start_x - end_x) + abs(start_y - end_y)
         if move_distance > unit.movement:
@@ -151,31 +154,34 @@ class BattleMap(QObject):
     
     def move_unit(self, unit, start_x, start_y, end_x, end_y):
         # Move the specified unit from its current position to the target coordinates if valid
-        print(f"Attempting to move {unit.name} from ({start_x}, {start_y}) to ({end_x}, {end_y})")
+        # print(f"Attempting to move {unit.name} from ({start_x}, {start_y}) to ({end_x}, {end_y})")
         if not unit:
-            print("No unit selected!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit("No unit selected!")
             return
 
         if not self.is_within_bounds(unit, start_x, start_y, end_x, end_y):
-            print("Cannot move there!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit("Cannot move there!")
             return
 
         # Move the unit if all checks pass
-        print(f"Moving {unit.name} from ({start_x}, {start_y}) to ({end_x}, {end_y}) on the grid.")
+        # print(f"Moving {unit.name} from ({start_x}, {start_y}) to ({end_x}, {end_y}) on the grid.")
         self.grid[end_x][end_y] = unit  # Place the unit at the destination
         self.grid[start_x][start_y] = None  # Clear the starting cell
-        #unit = self.grid[end_x][end_y]
         unit.has_moved = True  # Set the has_moved flag to True
-        print(f"Unit '{unit.name}' successfully moved to ({end_x}, {end_y}).")
+        print(f"Unit '{unit.name}' moved to ({end_x}, {end_y}).")
 
     def able_to_attack(self, unit, start_x, start_y, target_x, target_y):
         # Check if there's an enemy unit at the target location
         if not unit:
-            print("No unit selected!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit("No unit selected!")
             return False
 
         if unit.has_attacked:
-            print(f"{unit.name} has already attacked this turn!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit(f"{unit.name} has already attacked this turn!")
             return False
         target = self.grid[target_x][target_y]
         if target and target.allegiance != unit.allegiance:
@@ -184,10 +190,12 @@ class BattleMap(QObject):
             if distance <= unit.attack_range:
                 return True
             else:
-                print("Target is out of attack range!")
+                if unit.allegiance == "player":
+                    self.notification_signal.emit("Target is out of attack range!")
                 return False
         else:
-            print("No enemy at the target location!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit("No enemy at the target location!")
             return False
 
     def attack_unit(self, unit, start_x, start_y, target_x, target_y):
@@ -198,11 +206,10 @@ class BattleMap(QObject):
             unit.has_attacked = True  # Set the has_attacked flag to True
             unit.has_moved = True # You cannot move after attacked.
             # function to check if unit is defeated  
-            print(f"{target.name} defeated: {target.check_unit_defeated()}")       
             if target.check_unit_defeated():
                 # Remove the target from the grid
                 self.grid[target_x][target_y] = None
-                print(f"{target.name} defeated!")
+                print(f"{target.allegiance}'s {target.name} defeated!")
                 if self.check_army_defeated(target.allegiance):
                     self.handle_gameover(target.allegiance)
 
@@ -211,26 +218,31 @@ class BattleMap(QObject):
         # Deploy a skill on a target.
         target = self.grid[target_x][target_y]
         if not target:
-            print("No unit at the target location!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit("No unit at the target location!")
             return False           
 
         if (target.allegiance != unit.allegiance and (skill.effect_type == "buff" or skill.effect_type == "heal")) \
         or (target.allegiance == unit.allegiance and (skill.effect_type == "debuff" or skill.effect_type == "attack")):
-            print("Not a valid Target!")
+            if unit.allegiance == "player":
+                self.notification_signal.emit("Not a valid Target!")
             return False                      
 
         if skill.turns_until_ready > 0:
-            print(f"Skill {skill.name} is on cooldown for {skill.turns_until_ready} turns.")
+            if unit.allegiance == "player":
+                self.notification_signal.emit(f"Skill {skill.name} is still in cooldown for {skill.turns_until_ready} turns.")
             return False
 
         # limit healing if units' hp is full
         if skill.effect_type == "heal" and target.hp >= target.max_hp:
-            print(f"{target.name}'s HP is already full.")
+            if unit.allegiance == "player":
+                self.notification_signal.emit(f"{target.name}'s HP is already full.")
             return False           
 
         distance = abs(start_x - target_x) + abs(start_y - target_y)  # Assuming grid coordinates
         if distance > skill.range:
-            print(f"Target is out of range for skill {skill.name}.")
+            if unit.allegiance == "player":
+                self.notification_signal.emit(f"Target is out of range for skill {skill.name}.")
             return False
 
         # Apply the skill effect
@@ -238,13 +250,20 @@ class BattleMap(QObject):
             damage = skill.damage
             target.hp -= damage
             print(f"{unit.name} used {skill.name} on {target.name}, dealing {damage} damage.")
+            # function to check if unit is defeated  
+            if target.check_unit_defeated():
+                # Remove the target from the grid
+                self.grid[target_x][target_y] = None
+                print(f"{target.allegiance}'s {target.name} defeated!")
+                if self.check_army_defeated(target.allegiance):
+                    self.handle_gameover(target.allegiance)
         elif skill.effect_type == "heal": 
             heal_amount = skill.damage
             target.hp = min(target.max_hp , target.hp + heal_amount)
             print(f"{unit.name} used {skill.name} on {target.name}, heals {heal_amount} HP.")
         '''
         elif skill.effect_type == "buff": 
-            buff = skill.buff
+            buff = skill.damage
             target.buff.append(buff)
             print(f"{unit.name} used {skill.name} on {target.name}.")
         '''
@@ -256,7 +275,7 @@ class BattleMap(QObject):
 
     def end_turn(self):
         # End the player's turn, reset my units, and initiate enemy actions
-        print("Ending turn. Resetting units and initiating enemy actions.")
+        print("Ending player's turn. Enemy is thinking...")
         # Reset my units' movement and attack status
         self.reset_units_actions("player") # reset player's actions first for some skill to limit enemy action in next turn.
 
